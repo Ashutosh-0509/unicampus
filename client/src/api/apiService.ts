@@ -3,7 +3,8 @@
  * All API calls go through here.
  */
 
-const API_BASE = 'http://localhost:5000';
+// ✅ Production URL - Render backend
+const API_BASE = import.meta.env.VITE_API_URL || 'https://unicampus-backend-1p7e.onrender.com';
 
 async function apiRequest<T>(
   path: string,

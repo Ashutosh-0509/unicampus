@@ -46,7 +46,7 @@ const StudentSignup = () => {
                 throw new Error('Invalid roll number format (e.g., 2024CS001)');
             }
 
-            const response = await axios.post('http://localhost:5000/api/auth/register', {
+            const response = await axios.post('https://unicampus-backend-1p7e.onrender.com/api/auth/register', {
                 name: name.trim(),
                 email: email.trim().toLowerCase(),
                 password,
