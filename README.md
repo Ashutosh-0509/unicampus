@@ -93,7 +93,7 @@ UNICAMPUS is a full-stack application designed to streamline campus management p
 
 ## Usage
 - Access the client at `http://localhost:3000`.
-- The server runs on `http://localhost:5000`.
+- The server runs on `https://unicampus-backend-1p7e.onrender.com`.
 - The AI service runs on `http://localhost:8000`.
 
 ## Contributing

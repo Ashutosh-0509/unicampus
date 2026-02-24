@@ -72,7 +72,7 @@ export default function AttendanceAnalytics() {
             const token = getAuthToken();
             const studentId = user?.id || user?.studentId;
             const res = await axios.get(
-                `http://localhost:5000/api/attendance/analytics/${studentId}`,
+                `https://unicampus-backend-1p7e.onrender.com/api/attendance/analytics/${studentId}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setData(res.data);

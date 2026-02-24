@@ -5,7 +5,7 @@
 Smart Campus is an integrated management system for NIT campus with portals for Students, Faculty, and Admins.
 - **Modules**: Attendance, Academics, Library, Placements, Resources, Recommendations, Feedback, Finance, Hostel
 - **Portal URL**: http://localhost:8080
-- **Backend API**: http://localhost:5000
+- **Backend API**: https://unicampus-backend-1p7e.onrender.com
 - **AI Service**: http://localhost:8000
 
 ---

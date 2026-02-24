@@ -66,13 +66,13 @@ export default function FacultyAttendance() {
     try {
       setIsLoading(true);
       const token = getAuthToken();
-      const usersResponse = await fetch('http://localhost:5000/api/users?role=student', {
+      const usersResponse = await fetch('https://unicampus-backend-1p7e.onrender.com/api/users?role=student', {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       const users = await usersResponse.json();
       const approved = (Array.isArray(users) ? users : []).filter((u) => u.status !== 'rejected' && u.role === 'student');
 
-      const attendanceResponse = await fetch(`http://localhost:5000/api/attendance?subject=${encodeURIComponent(subject)}`);
+      const attendanceResponse = await fetch(`https://unicampus-backend-1p7e.onrender.com/api/attendance?subject=${encodeURIComponent(subject)}`);
       const attendanceData = await attendanceResponse.json();
       const records = Array.isArray(attendanceData) ? attendanceData : [];
 
@@ -139,7 +139,7 @@ export default function FacultyAttendance() {
             if (existing?.id) {
               const attended = Number(existing.attended || 0) + (present ? 1 : 0);
               const total = Number(existing.total || 0) + 1;
-              await fetch(`http://localhost:5000/api/attendance/${existing.id}`, {
+              await fetch(`https://unicampus-backend-1p7e.onrender.com/api/attendance/${existing.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -151,7 +151,7 @@ export default function FacultyAttendance() {
                 }),
               });
             } else {
-              await fetch('http://localhost:5000/api/attendance', {
+              await fetch('https://unicampus-backend-1p7e.onrender.com/api/attendance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

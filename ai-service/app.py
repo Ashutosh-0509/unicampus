@@ -18,7 +18,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://unicampus-backend-1p7e.onrender.com")
 chat_engine = ChatEngine(backend_url=BACKEND_URL)
 
 

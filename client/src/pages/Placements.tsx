@@ -24,7 +24,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://unicampus-backend-1p7e.onrender.com';
 const STAGES = ['Applied', 'Shortlisted', 'Interview', 'Offer'];
 
 const containerVariants = {

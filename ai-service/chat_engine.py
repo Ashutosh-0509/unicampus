@@ -12,7 +12,7 @@ import os
 
 
 class ChatEngine:
-    def __init__(self, backend_url="http://localhost:5000"):
+    def __init__(self, backend_url="https://unicampus-backend-1p7e.onrender.com"):
         self.backend_url = backend_url
         self.intents = self._build_intents()
         self.knowledge_base = self._load_knowledge_base()

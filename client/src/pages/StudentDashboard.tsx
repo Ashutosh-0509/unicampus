@@ -42,7 +42,7 @@ const StudentDashboard: React.FC = () => {
 
         // Fetch student profile from existing auth endpoint
         const profileResponse = await axios.get(
-          'http://localhost:5000/api/auth/me',
+          'https://unicampus-backend-1p7e.onrender.com/api/auth/me',
           { headers }
         );
         const profileUser = profileResponse.data?.user || user;
@@ -59,7 +59,7 @@ const StudentDashboard: React.FC = () => {
 
         let records: any[] = [];
         for (const studentId of studentIdentifiers) {
-          const response = await axios.get('http://localhost:5000/api/attendance', {
+          const response = await axios.get('https://unicampus-backend-1p7e.onrender.com/api/attendance', {
             headers,
             params: { studentId },
           });
@@ -71,7 +71,7 @@ const StudentDashboard: React.FC = () => {
         }
 
         if (records.length === 0) {
-          const fallbackResponse = await axios.get('http://localhost:5000/api/attendance', { headers });
+          const fallbackResponse = await axios.get('https://unicampus-backend-1p7e.onrender.com/api/attendance', { headers });
           records = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
         }
 

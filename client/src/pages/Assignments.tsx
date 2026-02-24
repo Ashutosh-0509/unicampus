@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://unicampus-backend-1p7e.onrender.com';
 
 export default function Assignments() {
   const { user } = useAuth();
