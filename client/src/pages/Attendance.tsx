@@ -1,348 +1,234 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import {
-  Calendar,
-  TrendingUp,
-  Sparkles,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  CalendarDays,
-  ArrowUpRight,
-  Brain,
+  Users, Briefcase, BookOpen, CreditCard, AlertTriangle,
+  TrendingDown, Activity, Target, CheckCircle2, Clock, Loader2
 } from 'lucide-react';
-import { mockAttendanceData, AttendanceData } from '@/lib/index';
-import { AttendanceCard } from '@/components/AttendanceCard';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState, useMemo } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { StatsCard } from '@/components/StatsCards';
+import { SentimentChart, AttendanceTrendChart } from '@/components/Charts';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { fadeInUp, staggerContainer, staggerItem } from '@/lib/motion';
+import axios from 'axios';
 
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
-};
+const API = 'https://unicampus-backend-1p7e.onrender.com';
 
-const itemFadeIn = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 }
-};
+const SENTIMENT_DATA = [
+  { name: 'Positive', value: 65, fill: 'var(--chart-4)' },
+  { name: 'Neutral', value: 25, fill: 'var(--chart-5)' },
+  { name: 'Negative', value: 10, fill: 'var(--destructive)' },
+];
 
-export default function Attendance() {
-  const navigate = useNavigate();
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().getMonth().toString());
-  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+const ATTENDANCE_TREND = [
+  { name: 'Week 1', value: 85 },
+  { name: 'Week 2', value: 82 },
+  { name: 'Week 3', value: 78 },
+  { name: 'Week 4', value: 75 },
+  { name: 'Week 5', value: 72 },
+  { name: 'Week 6', value: 68 },
+];
 
-  const attendanceLog = useMemo(() => {
-    const year = parseInt(selectedYear);
-    const month = parseInt(selectedMonth);
-    const days = new Date(year, month + 1, 0).getDate();
-    const firstDay = new Date(year, month, 1).getDay();
+export default function AdminDashboard() {
+  const { user, getAuthToken } = useAuth();
+  const [stats, setStats] = useState({ students: 0, placements: 0, overdueBooks: 0, feePending: 0 });
+  const [recentActions, setRecentActions] = useState<any[]>([]);
+  const [lowEngagement, setLowEngagement] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-    return {
-      days,
-      firstDay,
-      logs: Array.from({ length: days }, (_, i) => {
-        const dayOfWeek = (firstDay + i) % 7;
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const status = isWeekend ? 'holiday' : (Math.random() > 0.15 ? 'present' : 'absent');
-        return { day: i + 1, status };
-      })
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = getAuthToken();
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // Fetch real data in parallel
+        const [usersRes, placementsRes, libraryRes, financeRes, attendanceRes] = await Promise.allSettled([
+          axios.get(`${API}/api/users?role=student`, { headers }),
+          axios.get(`${API}/api/placements`, { headers }),
+          axios.get(`${API}/api/library`, { headers }),
+          axios.get(`${API}/api/finance`, { headers }),
+          axios.get(`${API}/api/attendance`, { headers }),
+        ]);
+
+        const students = usersRes.status === 'fulfilled' ? usersRes.value.data?.length || 0 : 0;
+        const placements = placementsRes.status === 'fulfilled'
+          ? placementsRes.value.data?.filter((p: any) => p.status === 'open')?.length || 0 : 0;
+        const overdueBooks = libraryRes.status === 'fulfilled'
+          ? libraryRes.value.data?.filter((b: any) => b.status === 'overdue')?.length || 0 : 0;
+        const feePending = financeRes.status === 'fulfilled'
+          ? financeRes.value.data?.filter((f: any) => f.status === 'pending')?.length || 0 : 0;
+
+        // Low engagement subjects (attendance < 75%)
+        if (attendanceRes.status === 'fulfilled') {
+          const records = attendanceRes.value.data || [];
+          const lowEng = records
+            .filter((r: any) => r.percentage < 75)
+            .slice(0, 5)
+            .map((r: any) => ({
+              id: r._id,
+              subject: r.subject,
+              faculty: r.faculty || 'N/A',
+              attendance: r.percentage,
+              risk: r.percentage < 65 ? 'High' : 'Medium'
+            }));
+          setLowEngagement(lowEng);
+        }
+
+        setStats({ students, placements, overdueBooks, feePending });
+      } catch (err) {
+        console.error('Admin dashboard fetch error:', err);
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [selectedMonth, selectedYear]);
+    fetchData();
+  }, []);
 
-  const totalClasses = mockAttendanceData.reduce((acc, s) => acc + s.total, 0);
-  const totalAttended = mockAttendanceData.reduce((acc, s) => acc + s.attended, 0);
-  const totalLeaves = totalClasses - totalAttended;
-  const criticalSubjects = mockAttendanceData.filter(s => s.percentage < 75).length;
-  const overallPercentage = Math.round(
-    mockAttendanceData.reduce((acc, curr) => acc + curr.percentage, 0) / mockAttendanceData.length
-  );
-  const remainingPerSubject = 10;
-  const projectedPct = Math.round(
-    mockAttendanceData.reduce((acc, s) => {
-      const proj = ((s.attended + remainingPerSubject) / (s.total + remainingPerSubject)) * 100;
-      return acc + proj;
-    }, 0) / mockAttendanceData.length
-  );
-
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+  const adminStats = [
+    { title: 'Total Students', value: isLoading ? 0 : stats.students, icon: <Users className="w-5 h-5" />, trend: 12, suffix: ' Active' },
+    { title: 'Active Placements', value: isLoading ? 0 : stats.placements, icon: <Briefcase className="w-5 h-5" />, trend: 5, suffix: ' Drives' },
+    { title: 'Overdue Books', value: isLoading ? 0 : stats.overdueBooks, icon: <BookOpen className="w-5 h-5" />, trend: -8, suffix: ' Units' },
+    { title: 'Fee Pending', value: isLoading ? 0 : stats.feePending, icon: <CreditCard className="w-5 h-5" />, trend: 2, suffix: ' Records' },
   ];
 
-  const years = ["2024", "2025", "2026"];
-
   return (
-    <div className="min-h-screen p-4 md:p-8 space-y-8">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="p-6 space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <motion.h1
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3"
-          >
-            <CalendarDays className="w-8 h-8 text-primary" />
-            Attendance Analytics
+          <motion.h1 variants={fadeInUp}
+            className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            Institutional Intelligence
           </motion.h1>
-          <p className="text-muted-foreground mt-1">Real-time tracking and AI-driven predictions for Semester 2, 2026.</p>
+          <motion.p variants={fadeInUp} className="text-muted-foreground mt-1">
+            Welcome back, {user?.name || 'Administrator'}. Here is the campus overview for today.
+          </motion.p>
         </div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-card/50 backdrop-blur-xl border border-primary/20 rounded-2xl p-4 flex items-center gap-4"
-        >
-          <div className="h-12 w-12 rounded-full border-4 border-primary flex items-center justify-center font-bold text-lg">
-            {overallPercentage}%
-          </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Overall Attendance</div>
-            <div className={`text-xs flex items-center gap-1 font-medium ${overallPercentage >= 75 ? 'text-green-500' : 'text-red-500'}`}>
-              {overallPercentage >= 75 ? '✅ Above threshold' : '⚠️ Below 75%'}
-            </div>
-          </div>
-        </motion.div>
       </div>
 
-      {/* Stats Quick Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Classes', value: totalClasses.toString(), icon: Calendar, color: 'text-blue-500' },
-          { label: 'Attended', value: totalAttended.toString(), icon: CheckCircle2, color: 'text-green-500' },
-          { label: 'Leaves Taken', value: totalLeaves.toString(), icon: Info, color: 'text-amber-500' },
-          { label: 'Critical Subjects', value: criticalSubjects.toString(), icon: AlertTriangle, color: 'text-destructive' },
-        ].map((stat, idx) => (
-          <motion.div
-            key={idx}
-            variants={itemFadeIn}
-            initial="hidden"
-            animate="show"
-            transition={{ delay: idx * 0.1 }}
-            className="bg-card/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex items-center gap-4"
-          >
-            <div className={`p-2 rounded-lg bg-white/5 ${stat.color}`}>
-              <stat.icon className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{stat.label}</p>
-              <p className="text-xl font-bold">{stat.value}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Subject Cards Grid */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-semibold">Subject Health Cards</h2>
-        </div>
-
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-        >
-          {mockAttendanceData.map((subject: AttendanceData) => (
-            <motion.div key={subject.subject} variants={itemFadeIn} className="group relative">
-              <AttendanceCard
-                subject={subject.subject}
-                percentage={subject.percentage}
-                attended={subject.attended}
-                total={subject.total}
-              />
-              <div className="mt-3 bg-primary/10 border border-primary/20 backdrop-blur-sm rounded-lg p-3 relative overflow-hidden group-hover:border-primary/40 transition-colors">
-                <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-                <div className="flex items-start gap-2">
-                  <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5 animate-pulse" />
-                  <p className="text-xs font-medium leading-relaxed">
-                    <span className="text-primary font-bold">AI Insights:</span> {subject.prediction}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+      {/* Stats Grid */}
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {adminStats.map((stat, idx) => (
+            <motion.div key={idx} variants={staggerItem}><StatsCard {...stat} /></motion.div>
           ))}
-        </motion.div>
-      </div>
+        </div>
+      )}
 
-      {/* Monthly Heatmap Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="lg:col-span-2 bg-card/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/20 rounded-lg">
-                <Calendar className="w-5 h-5 text-primary" />
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <motion.div variants={staggerItem} className="lg:col-span-1">
+          <Card className="h-full border-border/50 bg-card/50 backdrop-blur-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Target className="w-5 h-5 text-primary" /> Campus Sentiment
+              </CardTitle>
+              <CardDescription>AI-analyzed feedback from students</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center pt-4">
+              <div className="h-[250px] w-full"><SentimentChart data={SENTIMENT_DATA} /></div>
+              <div className="grid grid-cols-3 gap-4 w-full mt-4 text-center">
+                <div><p className="text-xs text-muted-foreground">Positive</p><p className="text-lg font-bold text-chart-4">65%</p></div>
+                <div><p className="text-xs text-muted-foreground">Neutral</p><p className="text-lg font-bold text-chart-5">25%</p></div>
+                <div><p className="text-xs text-muted-foreground">Negative</p><p className="text-lg font-bold text-destructive">10%</p></div>
               </div>
-              <h2 className="text-xl font-semibold">Attendance Heatmap</h2>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="w-[120px] bg-background/50 border-white/10">
-                  <SelectValue placeholder="Month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {months.map((m, i) => (
-                    <SelectItem key={i} value={i.toString()}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="w-[100px] bg-background/50 border-white/10">
-                  <SelectValue placeholder="Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map((y) => (
-                    <SelectItem key={y} value={y}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-xs mb-4 justify-end">
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500" /> Present</div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-destructive" /> Absent</div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-muted" /> Holiday</div>
-          </div>
-
-          <div className="grid grid-cols-7 gap-2">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center text-xs font-bold text-muted-foreground pb-2">{day}</div>
-            ))}
-            {Array.from({ length: attendanceLog.firstDay }).map((_, i) => (
-              <div key={`empty-${i}`} className="aspect-square" />
-            ))}
-            {attendanceLog.logs.map((log) => (
-              <motion.div
-                key={log.day}
-                whileHover={{ scale: 1.1 }}
-                className={`
-                  aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-all cursor-default
-                  ${log.status === 'present' ? 'bg-green-500/20 text-green-500 border border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : ''}
-                  ${log.status === 'absent' ? 'bg-destructive/20 text-destructive border border-destructive/30 shadow-[0_0_10px_rgba(239,68,68,0.1)] animate-pulse' : ''}
-                  ${log.status === 'holiday' ? 'bg-muted/30 text-muted-foreground border border-white/5' : ''}
-                `}
-              >
-                {log.day}
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/5 flex items-center gap-3">
-            <Info className="w-5 h-5 text-blue-400 shrink-0" />
-            <p className="text-sm text-muted-foreground">
-              {months[parseInt(selectedMonth)]} {selectedYear} shows <span className="text-foreground font-semibold">92% consistency</span> in attendance.
-              Your highest streak was <span className="text-green-400 font-bold">12 days</span>.
-            </p>
-          </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
-        {/* Smart Forecast Panel */}
-        <motion.div
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
-        >
-          <div className="bg-primary/5 border border-primary/20 rounded-3xl p-6 relative overflow-hidden">
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-3xl rounded-full" />
-            <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-primary" />
-              Smart Forecast
-            </h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Current Average</span>
-                  <span className="font-bold">{overallPercentage}%</span>
-                </div>
-                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(overallPercentage, 100)}%` }}
-                    transition={{ duration: 1 }}
-                    className={`h-full rounded-full ${overallPercentage >= 75 ? 'bg-primary shadow-[0_0_8px_var(--primary)]' : 'bg-red-500'}`}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Projected End-Semester</span>
-                  <span className={`font-bold ${projectedPct >= 75 ? 'text-emerald-400' : 'text-red-400'}`}>{projectedPct}%</span>
-                </div>
-                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(projectedPct, 100)}%` }}
-                    transition={{ duration: 1.2 }}
-                    className={`h-full rounded-full ${projectedPct >= 75 ? 'bg-emerald-500' : 'bg-red-500'}`}
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                <p className="text-xs text-muted-foreground mb-1 italic">AI Recommendation:</p>
-                <p className="text-sm font-medium leading-snug text-foreground">
-                  {overallPercentage >= 75
-                    ? `Your attendance is on track at ${overallPercentage}%. Projected end-semester: ${projectedPct}%. Keep it up!`
-                    : `Your attendance is ${overallPercentage}% — below the 75% threshold. Attend all upcoming classes to reach ${projectedPct}%.`
-                  }
-                </p>
-              </div>
-
-              {/* ✅ AI Analytics Button */}
-              <button
-                onClick={() => navigate('/student/attendance-analytics')}
-                className="w-full py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-bold transition-all hover:shadow-[0_0_15px_rgba(var(--primary),0.4)] flex items-center justify-center gap-2"
-              >
-                <Brain className="w-4 h-4" />
-                View AI Risk Analytics
-                <ArrowUpRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-card/40 border border-white/10 rounded-3xl p-6">
-            <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              At-Risk Alert
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-destructive/10 border border-destructive/20 rounded-xl">
+        <motion.div variants={staggerItem} className="lg:col-span-2">
+          <Card className="h-full border-border/50 bg-card/50 backdrop-blur-xl">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-sm font-bold">Digital Logic</p>
-                  <p className="text-xs text-muted-foreground">70% Current</p>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingDown className="w-5 h-5 text-destructive" /> Engagement Decline
+                  </CardTitle>
+                  <CardDescription>Average weekly attendance across all departments</CardDescription>
                 </div>
-                <div className="text-xs font-bold text-destructive px-2 py-1 bg-destructive/20 rounded-md uppercase tracking-tighter">
-                  Urgent
-                </div>
+                <Badge variant="destructive" className="animate-pulse">Action Required</Badge>
               </div>
-              <p className="text-xs text-muted-foreground text-center">
-                Attend the next 5 sessions to clear the 75% threshold.
-              </p>
-            </div>
-          </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="h-[300px] w-full"><AttendanceTrendChart data={ATTENDANCE_TREND} /></div>
+            </CardContent>
+          </Card>
         </motion.div>
       </div>
-    </div>
+
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Low Engagement - Real Data */}
+        <motion.div variants={staggerItem}>
+          <Card className="border-border/50 bg-card/50 backdrop-blur-xl">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" /> Low Engagement Alerts
+              </CardTitle>
+              <CardDescription>Subjects falling below 75% average attendance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[300px] pr-4">
+                {lowEngagement.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">✅ All subjects above 75%!</p>
+                ) : (
+                  <div className="space-y-4">
+                    {lowEngagement.map((item) => (
+                      <div key={item.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-background/40 border border-white/5 hover:border-primary/20 transition-colors">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{item.subject}</span>
+                          <span className="text-xs text-muted-foreground">{item.faculty}</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm font-bold">{item.attendance}%</div>
+                            <div className="text-[10px] text-muted-foreground">Attendance</div>
+                          </div>
+                          <Badge variant={item.risk === 'High' ? 'destructive' : 'secondary'} className="w-20 justify-center">
+                            {item.risk} Risk
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Recent Actions */}
+        <motion.div variants={staggerItem}>
+          <Card className="border-border/50 bg-card/50 backdrop-blur-xl h-full">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" /> Recent Administrative Actions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { icon: <CheckCircle2 className="w-4 h-4" />, color: 'bg-green-500/10 text-green-500', title: 'Placement Drive Published', desc: 'New company drive added to portal.', time: '2 hours ago' },
+                { icon: <Users className="w-4 h-4" />, color: 'bg-blue-500/10 text-blue-500', title: 'Bulk Attendance Reminder Sent', desc: `Notifications sent to ${stats.students} students.`, time: '5 hours ago' },
+                { icon: <CreditCard className="w-4 h-4" />, color: 'bg-amber-500/10 text-amber-500', title: 'Fee Ledger Reconciliation', desc: `${stats.feePending} pending fee records reviewed.`, time: 'Yesterday' },
+              ].map((action, i) => (
+                <div key={i} className="flex items-start gap-4 p-3 rounded-lg bg-background/20">
+                  <div className={`p-2 rounded-full ${action.color}`}>{action.icon}</div>
+                  <div>
+                    <p className="text-sm font-medium">{action.title}</p>
+                    <p className="text-xs text-muted-foreground">{action.desc}</p>
+                    <span className="text-[10px] text-muted-foreground mt-1 block">{action.time}</span>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
