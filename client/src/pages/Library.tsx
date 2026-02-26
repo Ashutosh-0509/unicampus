@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = 'https://unicampus-backend-1p7e.onrender.com';
+const API_BASE = 'http://localhost:5000';
 const BORROW_WINDOW_DAYS = 14;
 
 export default function Library() {

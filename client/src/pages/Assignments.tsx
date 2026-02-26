@@ -1,4 +1,4 @@
-ï»¿import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = 'https://unicampus-backend-1p7e.onrender.com';
+const API_BASE = 'http://localhost:5000';
 
 export default function Assignments() {
   const { user } = useAuth();
@@ -158,7 +158,7 @@ export default function Assignments() {
   const handleViewDetails = (assignment: Assignment) => {
     toast({
       title: assignment.title,
-      description: `${assignment.subject} â€¢ Due ${new Date(assignment.dueDate).toLocaleDateString()} â€¢ Status: ${assignment.status}`,
+      description: `${assignment.subject} • Due ${new Date(assignment.dueDate).toLocaleDateString()} • Status: ${assignment.status}`,
     });
   };
 

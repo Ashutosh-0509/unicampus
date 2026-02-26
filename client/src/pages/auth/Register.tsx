@@ -31,7 +31,7 @@ const Register = () => {
         }
 
         try {
-            const response = await axios.post('https://unicampus-backend-1p7e.onrender.com/api/auth/register', {
+            const response = await axios.post('http://localhost:5000/api/auth/register', {
                 name,
                 email,
                 password,

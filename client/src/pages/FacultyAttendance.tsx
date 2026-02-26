@@ -1,32 +1,20 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Users,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Send,
-  Calendar,
-  ChevronDown,
-  Search,
-  BellRing,
-  ShieldAlert,
-  Filter,
-  Plus
+  Users, CheckCircle, XCircle, Clock, Send, Calendar,
+  Search, BellRing, ShieldAlert, Filter, FileSpreadsheet, Loader2, CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+
+const API = import.meta.env.VITE_API_URL || 'https://unicampus-backend-1p7e.onrender.com';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'unmarked';
 
@@ -47,6 +35,11 @@ export default function FacultyAttendance() {
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, any>>({});
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+
+  // ✅ Simple direct ref
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const stats = useMemo(() => {
     const values = Object.values(attendance);
@@ -59,37 +52,39 @@ export default function FacultyAttendance() {
     };
   }, [attendance, students.length]);
 
-  const normalizeStudentId = (student: any) =>
-    String(student.studentId || student.rollNumber || student.id || '').trim();
-
   const loadRoster = async () => {
     try {
       setIsLoading(true);
       const token = getAuthToken();
-      const usersResponse = await fetch('https://unicampus-backend-1p7e.onrender.com/api/users?role=student', {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      const users = await usersResponse.json();
-      const approved = (Array.isArray(users) ? users : []).filter((u) => u.status !== 'rejected' && u.role === 'student');
+      const headers: any = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const attendanceResponse = await fetch(`https://unicampus-backend-1p7e.onrender.com/api/attendance?subject=${encodeURIComponent(subject)}`);
-      const attendanceData = await attendanceResponse.json();
-      const records = Array.isArray(attendanceData) ? attendanceData : [];
+      const [usersRes, attRes] = await Promise.all([
+        fetch(`${API}/api/users`, { headers }),
+        fetch(`${API}/api/attendance?subject=${encodeURIComponent(subject)}`, { headers }),
+      ]);
 
+      const usersData = await usersRes.json();
+      const attData = await attRes.json();
+
+      const approved = (Array.isArray(usersData) ? usersData : [])
+        .filter((u: any) => u.role === 'student' && u.status !== 'rejected');
+
+      const records = Array.isArray(attData) ? attData : [];
       const recordMap: Record<string, any> = {};
-      records.forEach((record: any) => {
-        const key = String(record.studentId || record.rollNumber || record.id || '').trim();
-        if (key) recordMap[key] = record;
+      records.forEach((r: any) => {
+        const key = String(r.studentId || r.rollNumber || '').trim();
+        if (key) recordMap[key] = r;
       });
 
-      const rows: StudentRow[] = approved.map((student) => {
-        const studentKey = normalizeStudentId(student);
-        const record = recordMap[studentKey];
+      const rows: StudentRow[] = approved.map((s: any) => {
+        const key = String(s.rollNumber || s.studentId || s._id || '').trim();
+        const record = recordMap[key];
         return {
-          id: studentKey,
-          name: student.name || 'Student',
-          roll: student.rollNumber || student.studentId || studentKey,
-          studentId: studentKey,
+          id: key,
+          name: s.name || 'Student',
+          roll: s.rollNumber || s.studentId || key,
+          studentId: key,
           attendance: Number(record?.percentage || 0),
         };
       });
@@ -105,302 +100,337 @@ export default function FacultyAttendance() {
     }
   };
 
-  useEffect(() => {
-    loadRoster();
-  }, [subject]);
+  useEffect(() => { loadRoster(); }, [subject]);
+
+  // ✅ Excel Upload - Direct and Simple
+  const handleExcelChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadResult(null);
+
+    try {
+      const token = getAuthToken();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`${API}/api/attendance/upload-excel`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        setUploadResult(result);
+        toast.success(`✅ Excel Uploaded! ${result.created} created, ${result.updated} updated`);
+        await loadRoster();
+      } else {
+        toast.error('Upload failed: ' + (result.error || 'Unknown error'));
+      }
+    } catch (err: any) {
+      toast.error('Upload error: ' + err.message);
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const updateStatus = (id: string, status: AttendanceStatus) => {
-    setAttendance((prev) => ({
-      ...prev,
-      [id]: prev[id] === status ? 'unmarked' : status,
-    }));
+    setAttendance((prev) => ({ ...prev, [id]: prev[id] === status ? 'unmarked' : status }));
   };
 
   const handleDualNotify = (studentName: string) => {
-    toast.success(`Notifications sent to ${studentName} and their Parent.`, {
-      description: 'Dual-channel SMS and App push triggered successfully.',
-      icon: <BellRing className="h-4 w-4 text-primary" />,
-    });
+    toast.success(`Notifications sent to ${studentName} and their Parent.`);
   };
 
-  const handleBulkSubmit = () => {
+  const handleBulkSubmit = async () => {
     if (stats.unmarked > 0) {
       toast.error(`Please mark attendance for all ${stats.unmarked} remaining students.`);
       return;
     }
-    const submit = async () => {
-      try {
-        const token = getAuthToken();
-        await Promise.all(
-          students.map(async (student) => {
-            const status = attendance[student.id];
-            const present = status === 'present' || status === 'late';
-            const existing = attendanceRecords[student.studentId];
-            if (existing?.id) {
-              const attended = Number(existing.attended || 0) + (present ? 1 : 0);
-              const total = Number(existing.total || 0) + 1;
-              await fetch(`https://unicampus-backend-1p7e.onrender.com/api/attendance/${existing.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  attended,
-                  total,
-                  subject,
-                  studentId: student.studentId,
-                  faculty: user?.name || 'Faculty',
-                }),
-              });
-            } else {
-              await fetch('https://unicampus-backend-1p7e.onrender.com/api/attendance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  studentId: student.studentId,
-                  subject,
-                  attended: present ? 1 : 0,
-                  total: 1,
-                  faculty: user?.name || 'Faculty',
-                }),
-              });
-            }
-          })
-        );
+    try {
+      const token = getAuthToken();
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        toast.success('Attendance records synced with main server.', {
-          description: `${stats.present} Present, ${stats.absent} Absent, ${stats.late} Late.`,
-        });
-        await loadRoster();
-      } catch (error) {
-        console.error('Failed to submit attendance:', error);
-        toast.error('Failed to submit attendance');
-      }
-    };
+      await Promise.all(students.map(async (student) => {
+        const present = attendance[student.id] === 'present' || attendance[student.id] === 'late';
+        const existing = attendanceRecords[student.studentId];
+        if (existing?._id) {
+          await fetch(`${API}/api/attendance/${existing._id}`, {
+            method: 'PUT', headers,
+            body: JSON.stringify({
+              attended: Number(existing.attended || 0) + (present ? 1 : 0),
+              total: Number(existing.total || 0) + 1,
+              subject, studentId: student.studentId, faculty: user?.name || 'Faculty',
+            }),
+          });
+        } else {
+          await fetch(`${API}/api/attendance`, {
+            method: 'POST', headers,
+            body: JSON.stringify({
+              studentId: student.studentId, subject,
+              attended: present ? 1 : 0, total: 1, faculty: user?.name || 'Faculty',
+            }),
+          });
+        }
+      }));
 
-    submit();
+      toast.success(`✅ Attendance submitted! ${stats.present} Present • ${stats.absent} Absent`);
+      await loadRoster();
+    } catch {
+      toast.error('Failed to submit attendance');
+    }
   };
 
   const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.roll.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 min-h-screen bg-background text-foreground">
-      {/* Header Section */}
+    <div className="p-6 max-w-7xl mx-auto space-y-6 min-h-screen">
+
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
+        <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Attendance Management
           </h1>
-          <p className="text-muted-foreground">
-            Mark daily attendance for your active class sessions.
-          </p>
+          <p className="text-muted-foreground mt-1">Mark daily attendance or upload Excel for bulk update.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-card/50 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2 flex items-center gap-6">
-            <div className="text-center">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Present</p>
-              <p className="text-xl font-bold text-primary">{stats.present}</p>
-            </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="text-center">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Absent</p>
-              <p className="text-xl font-bold text-destructive">{stats.absent}</p>
-            </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="text-center">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Late</p>
-              <p className="text-xl font-bold text-amber-500">{stats.late}</p>
-            </div>
+          {/* Stats */}
+          <div className="bg-card/50 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-4">
+            {[
+              { label: 'Present', value: stats.present, color: 'text-primary' },
+              { label: 'Absent', value: stats.absent, color: 'text-destructive' },
+              { label: 'Late', value: stats.late, color: 'text-amber-500' },
+            ].map((s, i) => (
+              <React.Fragment key={s.label}>
+                {i > 0 && <div className="w-px h-8 bg-white/10" />}
+                <div className="text-center">
+                  <p className="text-[10px] uppercase text-muted-foreground">{s.label}</p>
+                  <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                </div>
+              </React.Fragment>
+            ))}
           </div>
-          <Button
-            onClick={loadRoster}
-            variant="outline"
-            className="border-primary/50 text-primary hover:bg-primary/10 gap-2"
-            disabled={isLoading}
+
+          {/* ✅ Excel Upload - Simple approach */}
+          <label
+            htmlFor="excel-upload"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors
+              ${isUploading
+                ? 'border-green-500/30 text-green-400 bg-green-500/5 cursor-not-allowed'
+                : 'border-green-500/50 text-green-500 hover:bg-green-500/10'
+              }`}
           >
-            <Plus className="h-4 w-4" />
-            Add Attendance
-          </Button>
-          <Button
-            onClick={handleBulkSubmit}
-            className="bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
-          >
+            {isUploading
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <FileSpreadsheet className="h-4 w-4" />
+            }
+            {isUploading ? 'Uploading...' : 'Upload Excel'}
+          </label>
+          <input
+            id="excel-upload"
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelChange}
+            disabled={isUploading}
+            className="hidden"
+          />
+
+          <Button onClick={handleBulkSubmit} className="bg-primary hover:bg-primary/90">
             Submit Session
           </Button>
         </div>
       </div>
 
-      {/* Controls Card */}
+      {/* ✅ Upload Result */}
+      <AnimatePresence>
+        {uploadResult && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center gap-3"
+          >
+            <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+            <div>
+              <p className="font-semibold text-green-400">Excel uploaded successfully!</p>
+              <p className="text-sm text-muted-foreground">
+                {uploadResult.created} new records • {uploadResult.updated} updated • {uploadResult.total} total
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ Excel Format Guide */}
+      <Card className="p-4 bg-blue-500/5 border-blue-500/20">
+        <div className="flex items-start gap-3">
+          <FileSpreadsheet className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-blue-400">Excel Format Guide</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Required columns:
+              {['RollNo', 'Subject', 'Attended', 'Total'].map((col) => (
+                <span key={col} className="font-mono bg-white/5 px-1.5 py-0.5 rounded ml-1">{col}</span>
+              ))}
+              Optional:
+              {['Branch', 'Semester', 'Credits', 'SubjectCode'].map((col) => (
+                <span key={col} className="font-mono bg-white/5 px-1.5 py-0.5 rounded ml-1">{col}</span>
+              ))}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Controls */}
       <Card className="p-4 bg-card/40 backdrop-blur-xl border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground ml-1">Subject</label>
+          <label className="text-xs font-medium text-muted-foreground">Subject</label>
           <Select value={subject} onValueChange={setSubject}>
             <SelectTrigger className="bg-background/50 border-white/10">
-              <SelectValue placeholder="Select Subject" />
+              <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-popover border-white/10">
+            <SelectContent>
               <SelectItem value="Data Structures">Data Structures</SelectItem>
               <SelectItem value="Discrete Mathematics">Discrete Mathematics</SelectItem>
-              <SelectItem value="Digital Logic">Digital Logic</SelectItem>
+              <SelectItem value="Digital Logic Design">Digital Logic Design</SelectItem>
+              <SelectItem value="Communication Skills">Communication Skills</SelectItem>
+              <SelectItem value="Computer Networks">Computer Networks</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground ml-1">Session Date</label>
+          <label className="text-xs font-medium text-muted-foreground">Session Date</label>
           <div className="relative">
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-background/50 border-white/10 pl-10"
-            />
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              className="bg-background/50 border-white/10 pl-10" />
             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           </div>
         </div>
 
         <div className="md:col-span-2 space-y-2">
-          <label className="text-xs font-medium text-muted-foreground ml-1">Search Students</label>
+          <label className="text-xs font-medium text-muted-foreground">Search Students</label>
           <div className="relative">
-            <Input
-              placeholder="Search by name or roll number..."
-              value={searchQuery}
+            <Input placeholder="Search by name or roll number..." value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-background/50 border-white/10 pl-10 focus:ring-primary/50"
-            />
+              className="bg-background/50 border-white/10 pl-10" />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           </div>
         </div>
       </Card>
 
-      {/* Students Roster */}
+      {/* Roster Table */}
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/30 backdrop-blur-md">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-white/5 border-b border-white/10">
-              <tr>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Student Info</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Semester Attendance</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Action</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-right">Alerts</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              <AnimatePresence mode="popLayout">
-                {filteredStudents.map((student, index) => (
-                  <motion.tr
-                    key={`${student.id}-${student.roll}-${index}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className={`group transition-colors ${attendance[student.id] === 'present' ? 'bg-primary/5' :
-                      attendance[student.id] === 'absent' ? 'bg-destructive/5' :
-                        attendance[student.id] === 'late' ? 'bg-amber-500/5' : ''
-                      }`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary border border-primary/20">
-                          {student.name.charAt(0)}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-white/5 border-b border-white/10">
+                <tr>
+                  {['Student Info', 'Semester Attendance', 'Action', 'Alerts'].map((h, i) => (
+                    <th key={h} className={`px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${i === 3 ? 'text-right' : ''}`}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                <AnimatePresence mode="popLayout">
+                  {filteredStudents.map((student, index) => (
+                    <motion.tr key={`${student.id}-${index}`}
+                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      className={`group transition-colors ${attendance[student.id] === 'present' ? 'bg-primary/5' :
+                        attendance[student.id] === 'absent' ? 'bg-destructive/5' :
+                          attendance[student.id] === 'late' ? 'bg-amber-500/5' : ''}`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary border border-primary/20">
+                            {student.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-semibold">{student.name}</p>
+                            <p className="text-xs font-mono text-muted-foreground">{student.roll}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold">{student.name}</p>
-                          <p className="text-xs font-mono text-muted-foreground">{student.roll}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div className={`h-full ${student.attendance < 75 ? 'bg-destructive' : 'bg-primary'}`}
+                              style={{ width: `${Math.min(student.attendance, 100)}%` }} />
+                          </div>
+                          <span className={`text-sm font-medium ${student.attendance < 75 ? 'text-destructive' : ''}`}>
+                            {student.attendance}%
+                          </span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-1000 ${student.attendance < 75 ? 'bg-destructive shadow-[0_0_8px_var(--destructive)]' : 'bg-primary shadow-[0_0_8px_var(--primary)]'
-                              }`}
-                            style={{ width: `${student.attendance}%` }}
-                          />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {[
+                            { status: 'present' as const, Icon: CheckCircle, color: 'bg-primary' },
+                            { status: 'absent' as const, Icon: XCircle, color: 'bg-destructive' },
+                            { status: 'late' as const, Icon: Clock, color: 'bg-amber-500' },
+                          ].map(({ status, Icon, color }) => (
+                            <Button key={status} size="sm" variant="outline"
+                              onClick={() => updateStatus(student.id, status)}
+                              className={`h-8 w-8 p-0 rounded-full transition-all ${attendance[student.id] === status
+                                ? `${color} text-white border-transparent scale-110` : 'border-white/10'}`}
+                            >
+                              <Icon className="h-4 w-4" />
+                            </Button>
+                          ))}
                         </div>
-                        <span className={`text-sm font-medium ${student.attendance < 75 ? 'text-destructive' : 'text-foreground'}`}>
-                          {student.attendance}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={attendance[student.id] === 'present' ? 'default' : 'outline'}
-                          onClick={() => updateStatus(student.id, 'present')}
-                          className={`h-8 w-8 p-0 rounded-full transition-all ${attendance[student.id] === 'present' ? 'bg-primary text-white scale-110 shadow-lg shadow-primary/20' : 'border-white/10 hover:border-primary/50'
-                            }`}
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={attendance[student.id] === 'absent' ? 'destructive' : 'outline'}
-                          onClick={() => updateStatus(student.id, 'absent')}
-                          className={`h-8 w-8 p-0 rounded-full transition-all ${attendance[student.id] === 'absent' ? 'bg-destructive text-white scale-110 shadow-lg shadow-destructive/20' : 'border-white/10 hover:border-destructive/50'
-                            }`}
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={attendance[student.id] === 'late' ? 'secondary' : 'outline'}
-                          onClick={() => updateStatus(student.id, 'late')}
-                          className={`h-8 w-8 p-0 rounded-full transition-all ${attendance[student.id] === 'late' ? 'bg-amber-500 text-white scale-110 shadow-lg shadow-amber-500/20' : 'border-white/10 hover:border-amber-500/50'
-                            }`}
-                        >
-                          <Clock className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {student.attendance < 75 && (
-                          <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
-                            <ShieldAlert className="h-3 w-3 mr-1" /> At Risk
-                          </Badge>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDualNotify(student.name)}
-                          className="text-muted-foreground hover:text-primary hover:bg-primary/10"
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {student.attendance < 75 && (
+                            <Badge variant="destructive" className="bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
+                              <ShieldAlert className="h-3 w-3 mr-1" /> At Risk
+                            </Badge>
+                          )}
+                          <Button variant="ghost" size="sm" onClick={() => handleDualNotify(student.name)}
+                            className="text-muted-foreground hover:text-primary">
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Footer Info */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-muted-foreground px-2">
+      {/* Footer */}
+      <div className="flex justify-between items-center text-sm text-muted-foreground px-2">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4" />
           <span>Showing {filteredStudents.length} of {students.length} Students</span>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-primary shadow-[0_0_5px_var(--primary)]" />
-            <span>Present</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-destructive shadow-[0_0_5px_var(--destructive)]" />
-            <span>Absent</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]" />
-            <span>Late</span>
-          </div>
+          {[{ color: 'bg-primary', label: 'Present' }, { color: 'bg-destructive', label: 'Absent' }, { color: 'bg-amber-500', label: 'Late' }]
+            .map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <div className={`h-2 w-2 rounded-full ${color}`} />
+                <span>{label}</span>
+              </div>
+            ))}
         </div>
       </div>
     </div>

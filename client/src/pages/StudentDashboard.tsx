@@ -91,7 +91,7 @@ const StudentDashboard: React.FC = () => {
   const lowAttendanceSubjects = attendanceData.filter((s: any) => s.percentage < 75);
 
   // Calculate overall attendance
-  const overallAttendance = attendanceData.length > 0 
+  const overallAttendance = attendanceData.length > 0
     ? (attendanceData.reduce((sum: number, s: any) => sum + Number(s.percentage || 0), 0) / attendanceData.length).toFixed(1)
     : '0';
 
@@ -231,14 +231,14 @@ const StudentDashboard: React.FC = () => {
                       <p className="text-xs text-slate-500">
                         {data.attended} / {data.total} Classes Attended
                       </p>
-                    <div className="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${data.percentage < 75 ? 'bg-red-500' : 'bg-primary'}`}
-                        style={{ width: `${data.percentage}%` }}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                      <div className="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${data.percentage < 75 ? 'bg-red-500' : 'bg-primary'}`}
+                          style={{ width: `${data.percentage}%` }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))
               ) : null}
             </div>

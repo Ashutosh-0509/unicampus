@@ -4,12 +4,18 @@ const { User } = require('../models');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 
-// GET /api/users
-router.get('/', protect, authorize('admin'), async (req, res) => {
+// GET /api/users — admin + faculty access
+router.get('/', protect, async (req, res) => {
   try {
+    // Students cannot access user list
+    if (req.user.role === 'student') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const { role } = req.query;
     const filter = {};
     if (role) filter.role = role;
+
     const users = await User.find(filter).select('-password').lean();
     res.json(users);
   } catch (error) {
@@ -39,7 +45,7 @@ router.put('/:id', protect, async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id
+// DELETE /api/users/:id — admin only
 router.delete('/:id', protect, authorize('admin'), async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);

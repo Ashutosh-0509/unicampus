@@ -31,7 +31,7 @@ const StudentLogin = () => {
                 throw new Error("Please enter your Roll Number or Email");
             }
 
-            const response = await axios.post('https://unicampus-backend-1p7e.onrender.com/api/auth/login', {
+            const response = await axios.post('http://localhost:5000/api/auth/login', {
                 identifier: identifier.trim(),
                 password: password
             });

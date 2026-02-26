@@ -95,7 +95,7 @@ export default function Hostel() {
     const categoryLabel = CATEGORIES.find((c) => c.value === formData.category)?.label || 'General';
 
     try {
-      const response = await fetch('https://unicampus-backend-1p7e.onrender.com/api/hostel/complaints', {
+      const response = await fetch('http://localhost:5000/api/hostel/complaints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

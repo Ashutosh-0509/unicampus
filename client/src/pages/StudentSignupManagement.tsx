@@ -37,7 +37,7 @@ const StudentSignupManagement = () => {
     try {
       setIsLoading(true);
       const token = getAuthToken();
-      const response = await axios.get('https://unicampus-backend-1p7e.onrender.com/api/auth/pending-signups', {
+      const response = await axios.get('http://localhost:5000/api/auth/pending-signups', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRequests(response.data.data || []);
@@ -62,7 +62,7 @@ const StudentSignupManagement = () => {
     try {
       const token = getAuthToken();
       await axios.post(
-        `https://unicampus-backend-1p7e.onrender.com/api/auth/approve-signup/${selectedRequest._id}`,
+        `http://localhost:5000/api/auth/approve-signup/${selectedRequest._id}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -89,7 +89,7 @@ const StudentSignupManagement = () => {
     try {
       const token = getAuthToken();
       await axios.post(
-        `https://unicampus-backend-1p7e.onrender.com/api/auth/reject-signup/${selectedRequest._id}`,
+        `http://localhost:5000/api/auth/reject-signup/${selectedRequest._id}`,
         { reason: rejectReason },
         { headers: { Authorization: `Bearer ${token}` } }
       );

@@ -69,7 +69,7 @@ export const NotificationCenter = () => {
       const token = getAuthToken();
       if (!token) return;
 
-      const response = await axios.get('https://unicampus-backend-1p7e.onrender.com/api/notifications', {
+      const response = await axios.get('http://localhost:5000/api/notifications', {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -91,7 +91,7 @@ export const NotificationCenter = () => {
     try {
       const token = getAuthToken();
       await axios.patch(
-        `https://unicampus-backend-1p7e.onrender.com/api/notifications/${notificationId}/mark-read`,
+        `http://localhost:5000/api/notifications/${notificationId}/mark-read`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -130,7 +130,7 @@ export const NotificationCenter = () => {
     try {
       const token = getAuthToken();
       await axios.post(
-        'https://unicampus-backend-1p7e.onrender.com/api/notifications/clear-all',
+        'http://localhost:5000/api/notifications/clear-all',
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
