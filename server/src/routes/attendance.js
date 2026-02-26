@@ -18,8 +18,29 @@ const upload = multer({ storage: multer.memoryStorage() });
 // ✅ AI Analytics — student accessible
 router.get('/analytics/:studentId', protect, getAttendanceAnalytics);
 
+// ✅ GET all attendance — faculty, admin, student accessible
+router.get('/', protect, async (req, res) => {
+    try {
+        const { studentId, subject } = req.query;
+        let query = {};
+
+        // Students can only see their own data
+        if (req.user.role === 'student') {
+            query.studentId = req.user.studentId || req.user.rollNumber || req.user.id;
+        } else {
+            if (studentId) query.studentId = studentId;
+            if (subject) query.subject = subject;
+        }
+
+        const records = await Attendance.find(query).sort({ lastUpdated: -1 });
+        res.json(records);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ✅ Excel Bulk Upload — faculty only
-router.post('/upload-excel', protect, authorize('faculty'), upload.single('file'), async (req, res) => {
+router.post('/upload-excel', protect, authorize('faculty', 'admin'), upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -76,8 +97,19 @@ router.post('/upload-excel', protect, authorize('faculty'), upload.single('file'
     }
 });
 
+// ✅ Update single attendance record
+router.put('/:id', protect, authorize('faculty', 'admin'), async (req, res) => {
+    try {
+        const record = await Attendance.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!record) return res.status(404).json({ error: 'Record not found' });
+        res.json(record);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Faculty-only routes
-router.use(protect, authorize('faculty'));
+router.use(protect, authorize('faculty', 'admin'));
 router.post('/mark', markAttendance);
 router.post('/notify-student', notifyAtRiskStudent);
 

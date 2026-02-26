@@ -45,7 +45,7 @@ export default function AdminDashboard() {
 
         // Fetch real data in parallel
         const [usersRes, placementsRes, libraryRes, financeRes, attendanceRes] = await Promise.allSettled([
-          axios.get(`${API}/api/users?role=student`, { headers }),
+          axios.get(`${API}/api/users`, { headers }),
           axios.get(`${API}/api/placements`, { headers }),
           axios.get(`${API}/api/library`, { headers }),
           axios.get(`${API}/api/finance`, { headers }),
