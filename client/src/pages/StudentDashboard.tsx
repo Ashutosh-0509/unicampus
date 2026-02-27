@@ -300,3 +300,7 @@ const StudentDashboard: React.FC = () => {
 };
 
 export default StudentDashboard;
+import AIAttendancePrediction from '@/components/AIAttendancePrediction';
+
+// Dashboard mein kahi bhi add karo:
+<AIAttendancePrediction studentId="2024CS101" />
