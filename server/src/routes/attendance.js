@@ -9,6 +9,79 @@ const { markAttendance, notifyAtRiskStudent, getAttendanceAnalytics } = require(
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+router.get('/predict/:studentId', protect, async (req, res) => {
+    console.log(`🤖 AI Prediction requested for student: ${req.params.studentId}`);
+    try {
+        const { studentId } = req.params;
+        const totalLectures = Number(req.query.totalLectures || 60);
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+        if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not found');
+
+        const records = await Attendance.find({ studentId });
+        if (!records.length) {
+            console.log(`⚠️ No records found for student: ${studentId}`);
+            return res.json({
+                overall_risk: 'SAFE',
+                overall_message: 'Attendance data not found for prediction.',
+                subjects: []
+            });
+        }
+
+        const completedLectures = Math.max(...records.map(r => r.total || 0));
+        const remainingLectures = Math.max(0, totalLectures - completedLectures);
+
+        const prompt = `You are an academic advisor. Respond ONLY with valid JSON. No markdown, no explanation.
+Student Attendance:
+${records.map(r => `${r.subject}: ${r.attended}/${r.total} = ${r.percentage}%`).join('\n')}
+
+Total semester lectures: ${totalLectures}
+Completed so far: ${completedLectures}
+Remaining: ${remainingLectures}
+
+For subjects below 75% calculate lectures needed to reach 75%.
+Respond EXACTLY in this JSON format:
+{"overall_risk":"HIGH","overall_message":"short Hinglish message","subjects":[{"subject":"name","current_percentage":83,"risk_level":"SAFE","lectures_needed":0,"can_miss":5,"predicted_percentage":85,"advice":"short Hinglish advice"}]}`;
+
+        const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.2,
+                        maxOutputTokens: 1500
+                    }
+                })
+            }
+        );
+
+        const geminiData = await geminiRes.json();
+        if (!geminiRes.ok) {
+            console.error('❌ Gemini Error:', geminiData);
+            throw new Error(geminiData?.error?.message || 'Gemini API error');
+        }
+
+        const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        let prediction;
+        try {
+            prediction = JSON.parse(rawText.replace(/```json|```/g, '').trim());
+        } catch {
+            const match = rawText.match(/\{[\s\S]*\}/);
+            if (!match) throw new Error('Invalid JSON from AI');
+            prediction = JSON.parse(match[0]);
+        }
+
+        console.log('✅ AI Prediction successful');
+        res.json(prediction);
+    } catch (error) {
+        console.error('❌ AI Prediction error:', error.message);
+        res.status(500).json({ error: 'AI prediction failed', details: error.message });
+    }
+});
+
 // ✅ GET attendance
 router.get('/', protect, async (req, res) => {
     try {
@@ -103,72 +176,6 @@ router.post('/mark', protect, authorize('faculty', 'admin'), markAttendance);
 router.post('/notify-student', protect, authorize('faculty', 'admin'), notifyAtRiskStudent);
 
 
-// ✅ AI Attendance Prediction
-router.get('/predict/:studentId', protect, async (req, res) => {
-    try {
-        const { studentId } = req.params;
-        const totalLectures = Number(req.query.totalLectures || 60);
-        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-        if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not found');
-
-        const records = await Attendance.find({ studentId });
-        if (!records.length) {
-            return res.json({
-                overall_risk: 'SAFE',
-                overall_message: 'Attendance data not found for prediction.',
-                subjects: []
-            });
-        }
-
-        const completedLectures = Math.max(...records.map(r => r.total || 0));
-        const remainingLectures = Math.max(0, totalLectures - completedLectures);
-
-        const prompt = `You are an academic advisor. Respond ONLY with valid JSON. No markdown, no explanation.
-Student Attendance:
-${records.map(r => `${r.subject}: ${r.attended}/${r.total} = ${r.percentage}%`).join('\n')}
-
-Total semester lectures: ${totalLectures}
-Completed so far: ${completedLectures}
-Remaining: ${remainingLectures}
-
-For subjects below 75% calculate lectures needed to reach 75%.
-Respond EXACTLY in this JSON format:
-{"overall_risk":"HIGH","overall_message":"short Hinglish message","subjects":[{"subject":"name","current_percentage":83,"risk_level":"SAFE","lectures_needed":0,"can_miss":5,"predicted_percentage":85,"advice":"short Hinglish advice"}]}`;
-
-        const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: {
-                        temperature: 0.2,
-                        maxOutputTokens: 1500
-                    }
-                })
-            }
-        );
-
-        const geminiData = await geminiRes.json();
-        if (!geminiRes.ok) throw new Error(geminiData?.error?.message || 'Gemini API error');
-
-        const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        let prediction;
-        try {
-            prediction = JSON.parse(rawText.replace(/```json|```/g, '').trim());
-        } catch {
-            const match = rawText.match(/\{[\s\S]*\}/);
-            if (!match) throw new Error('Invalid JSON from AI');
-            prediction = JSON.parse(match[0]);
-        }
-
-        res.json(prediction);
-    } catch (error) {
-        console.error('AI Prediction error:', error.message);
-        res.status(500).json({ error: 'AI prediction failed', details: error.message });
-    }
-});
+// End of AI route (moved up)
 
 module.exports = router;
