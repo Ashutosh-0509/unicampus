@@ -38,7 +38,7 @@ Respond with this exact JSON structure:
 {"overall_risk":"HIGH","overall_message":"short message in Hinglish","subjects":[{"subject":"name","current_percentage":83,"risk_level":"SAFE","lectures_needed":0,"can_miss":5,"predicted_percentage":85,"advice":"short Hinglish advice"}]}`;
 
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
