@@ -36,7 +36,7 @@ export default function AIAttendancePrediction({ studentId }: { studentId: strin
         setError('');
         try {
             const token = getAuthToken();
-            const res = await fetch(`${API}/api/ai/predict/${studentId}?totalLectures=60`, {
+            const res = await fetch(`${API}/api/attendance/predict/${studentId}?totalLectures=60`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
