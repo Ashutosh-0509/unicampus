@@ -5,88 +5,82 @@ const Attendance = require('../models/Attendance');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// ✅ AI Attendance Prediction
 router.get('/predict/:studentId', protect, async (req, res) => {
     try {
         const { studentId } = req.params;
-        const { totalLectures = 60 } = req.query; // Total lectures in semester
+        const totalLectures = Number(req.query.totalLectures || 60);
 
-        // Fetch real attendance data
         const records = await Attendance.find({ studentId });
-
         if (!records.length) {
-            return res.json({ predictions: [], message: 'No attendance data found' });
+            return res.json({
+                overall_risk: 'SAFE',
+                overall_message: 'Koi attendance data nahi mila!',
+                subjects: []
+            });
         }
 
-        // Build prompt for Gemini
-        const attendanceData = records.map(r => ({
-            subject: r.subject,
-            attended: r.attended,
-            total: r.total,
-            percentage: r.percentage,
-        }));
+        const completedLectures = Math.max(...records.map(r => r.total));
+        const remainingLectures = totalLectures - completedLectures;
 
-        const remainingLectures = Number(totalLectures) - Math.max(...records.map(r => r.total));
+        const prompt = `You are an academic advisor. Analyze this student attendance data and respond ONLY with valid JSON, no markdown, no code blocks, no extra text.
 
-        const prompt = `
-You are an academic advisor AI. Analyze this student's attendance and give predictions.
+Student Attendance:
+${records.map(r => `${r.subject}: ${r.attended}/${r.total} = ${r.percentage}%`).join('\n')}
 
-Current Attendance Data:
-${attendanceData.map(r => `- ${r.subject}: ${r.attended}/${r.total} classes (${r.percentage}%)`).join('\n')}
+Total semester lectures: ${totalLectures}
+Completed so far: ${completedLectures}  
+Remaining: ${remainingLectures}
 
-Total lectures in semester: ${totalLectures}
-Lectures completed so far: ${Math.max(...records.map(r => r.total))}
-Remaining lectures: ${remainingLectures}
+For subjects below 75%: calculate how many more lectures needed to reach 75%.
+Formula: lectures_needed = ceil((0.75 * (total + remaining) - attended) / 1) if result > 0 else 0
 
-For each subject, calculate:
-1. Current percentage
-2. If below 75%: How many MORE lectures must attend to reach 75%
-3. If already above 75%: How many can miss and still stay above 75%
-4. Predicted end-of-semester percentage if current trend continues
-5. Risk level: HIGH (below 65%), MEDIUM (65-74%), SAFE (75%+)
+Respond with this exact JSON structure:
+{"overall_risk":"HIGH","overall_message":"short message in Hinglish","subjects":[{"subject":"name","current_percentage":83,"risk_level":"SAFE","lectures_needed":0,"can_miss":5,"predicted_percentage":85,"advice":"short Hinglish advice"}]}`;
 
-Respond in JSON format only, no extra text:
-{
-  "overall_risk": "HIGH/MEDIUM/SAFE",
-  "overall_message": "short motivational message in Hinglish",
-  "subjects": [
-    {
-      "subject": "subject name",
-      "current_percentage": 83,
-      "risk_level": "SAFE",
-      "lectures_needed": 0,
-      "can_miss": 5,
-      "predicted_percentage": 85,
-      "advice": "short advice in Hinglish"
-    }
-  ]
-}`;
-
-        // Call Gemini API
         const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
+                    generationConfig: {
+                        temperature: 0.1,
+                        maxOutputTokens: 2000,
+                        responseMimeType: "application/json"
+                    }
                 })
             }
         );
 
         const geminiData = await geminiRes.json();
+        console.log('Gemini status:', geminiRes.status);
+        console.log('Gemini response:', JSON.stringify(geminiData).substring(0, 300));
+
+        if (!geminiRes.ok) {
+            throw new Error(`Gemini API error: ${geminiData?.error?.message || 'Unknown'}`);
+        }
+
         const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        console.log('Raw text:', rawText.substring(0, 200));
 
-        // Parse JSON from response
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('Invalid Gemini response');
+        // Try multiple JSON extraction methods
+        let prediction;
+        try {
+            prediction = JSON.parse(rawText);
+        } catch {
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                prediction = JSON.parse(jsonMatch[0]);
+            } else {
+                throw new Error('Could not parse Gemini response as JSON');
+            }
+        }
 
-        const prediction = JSON.parse(jsonMatch[0]);
         res.json(prediction);
 
     } catch (error) {
-        console.error('AI Prediction error:', error);
+        console.error('AI Prediction error:', error.message);
         res.status(500).json({ error: 'AI prediction failed: ' + error.message });
     }
 });
