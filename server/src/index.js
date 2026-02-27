@@ -63,3 +63,13 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
+app.use(cors({
+  origin: [
+    'http://localhost:8080',
+    'http://localhost:8081',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:8081',
+    'https://unicampus-mu.vercel.app',
+  ],
+  credentials: false
+}));

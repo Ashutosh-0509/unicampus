@@ -1,116 +1,152 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
-const { authorize } = require('../middleware/roleMiddleware');
 const multer = require('multer');
 const xlsx = require('xlsx');
+const { protect } = require('../middleware/authMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
 const Attendance = require('../models/Attendance');
+const { markAttendance, notifyAtRiskStudent, getAttendanceAnalytics } = require('../controllers/attendanceController');
 
-const {
-    markAttendance,
-    notifyAtRiskStudent,
-    getAttendanceAnalytics,
-} = require('../controllers/attendanceController');
+// Multer setup for Excel upload
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
-// Multer memory storage for Excel
-const upload = multer({ storage: multer.memoryStorage() });
+/**
+ * @route   POST /api/attendance/mark
+ * @desc    Mark attendance for multiple students in a session
+ * @access  Private (Faculty, Admin)
+ */
+router.post('/mark', protect, authorize('faculty', 'admin'), markAttendance);
 
-// ✅ AI Analytics — student accessible
+/**
+ * @route   POST /api/attendance/notify-risk
+ * @desc    Send attendance alert notifications to student and parent
+ * @access  Private (Faculty, Admin)
+ */
+router.post('/notify-risk', protect, authorize('faculty', 'admin'), notifyAtRiskStudent);
+
+/**
+ * @route   GET /api/attendance/analytics/:studentId
+ * @desc    Get attendance analytics for a specific student
+ * @access  Private
+ */
 router.get('/analytics/:studentId', protect, getAttendanceAnalytics);
 
-// ✅ GET all attendance — faculty, admin, student accessible
-router.get('/', protect, async (req, res) => {
-    try {
-        const { studentId, subject } = req.query;
-        let query = {};
+/**
+ * @route   POST /api/attendance/upload-excel
+ * @desc    Bulk upload/update attendance via Excel
+ * @access  Private (Faculty, Admin)
+ */
+router.post(
+    '/upload-excel',
+    protect,
+    authorize('faculty', 'admin'),
+    upload.single('file'),
+    async (req, res) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: 'No file uploaded' });
+            }
 
-        // Students can only see their own data
-        if (req.user.role === 'student') {
-            query.studentId = req.user.studentId || req.user.rollNumber || req.user.id;
-        } else {
-            if (studentId) query.studentId = studentId;
-            if (subject) query.subject = subject;
-        }
+            const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = xlsx.utils.sheet_to_json(sheet);
 
-        const records = await Attendance.find(query).sort({ lastUpdated: -1 });
-        res.json(records);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+            console.log(`📊 Excel rows received: ${rows.length}`);
+            if (!rows.length) {
+                return res.status(400).json({ error: 'Excel file is empty' });
+            }
 
-// ✅ Excel Bulk Upload — faculty only
-router.post('/upload-excel', protect, authorize('faculty', 'admin'), upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+            let created = 0;
+            let updated = 0;
+            const errors = [];
 
-        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = xlsx.utils.sheet_to_json(sheet);
+            for (const row of rows) {
+                try {
+                    const studentId = String(
+                        row['RollNo'] ||
+                        row['rollno'] ||
+                        row['StudentId'] ||
+                        row['studentId'] ||
+                        ''
+                    ).trim();
 
-        if (!rows.length) return res.status(400).json({ error: 'Excel file is empty' });
+                    const subject = String(
+                        row['Subject'] || row['subject'] || ''
+                    ).trim();
 
-        let created = 0, updated = 0;
-        const errors = [];
+                    const attended = Number(row['Attended'] || 0);
+                    const total = Number(row['Total'] || 0);
+                    const branch = String(row['Branch'] || 'CS').trim();
+                    const semester = Number(row['Semester'] || 1);
+                    const credits = Number(row['Credits'] || 3);
 
-        for (const row of rows) {
-            try {
-                const studentId = String(row['RollNo'] || row['rollno'] || row['StudentId'] || row['studentId'] || row['Roll Number'] || '').trim();
-                const subject = String(row['Subject'] || row['subject'] || '').trim();
-                const attended = Number(row['Attended'] || row['attended'] || 0);
-                const total = Number(row['Total'] || row['total'] || 0);
-                const branch = String(row['Branch'] || row['branch'] || 'CS').trim();
-                const semester = Number(row['Semester'] || row['semester'] || 1);
-                const credits = Number(row['Credits'] || row['credits'] || 3);
-                const subjectCode = String(row['SubjectCode'] || row['subjectCode'] || subject.substring(0, 6).toUpperCase());
+                    const subjectCode = String(
+                        row['SubjectCode'] ||
+                        subject.substring(0, 6).toUpperCase()
+                    );
 
-                if (!studentId || !subject) { errors.push(`Missing studentId or subject`); continue; }
+                    if (!studentId || !subject) {
+                        errors.push(`Row skipped - missing studentId or subject`);
+                        continue;
+                    }
 
-                const percentage = total > 0 ? Math.round((attended / total) * 100) : 0;
-                const existing = await Attendance.findOne({ studentId, subject });
+                    const percentage = total > 0 ? Math.round((attended / total) * 100) : 0;
 
-                if (existing) {
-                    existing.attended = attended;
-                    existing.total = total;
-                    existing.percentage = percentage;
-                    existing.lastUpdated = new Date();
-                    await existing.save();
-                    updated++;
-                } else {
-                    await Attendance.create({
-                        studentId, subject, subjectCode,
-                        branch, semester, credits,
-                        attended, total, percentage,
-                        faculty: req.user?.name || 'Faculty',
-                        lastUpdated: new Date(),
-                    });
-                    created++;
+                    const result = await Attendance.findOneAndUpdate(
+                        { studentId, subject },
+                        {
+                            $set: {
+                                studentId,
+                                subject,
+                                subjectCode,
+                                branch,
+                                semester,
+                                credits,
+                                attended,
+                                total,
+                                percentage,
+                                faculty: req.user?.name || 'Faculty',
+                                lastUpdated: new Date(),
+                            },
+                        },
+                        {
+                            upsert: true,
+                            returnDocument: 'after',
+                            setDefaultsOnInsert: true,
+                            rawResult: true,
+                        }
+                    );
+
+                    if (result.lastErrorObject.upserted) {
+                        created++;
+                    } else {
+                        updated++;
+                    }
+
+                } catch (err) {
+                    console.error("Row error:", err.message);
+                    errors.push(err.message);
                 }
-            } catch (e) { errors.push(e.message); }
+            }
+
+            console.log(
+                `✅ Done! Created: ${created}, Updated: ${updated}, Errors: ${errors.length}`
+            );
+
+            res.json({
+                message: '✅ Excel processed successfully',
+                created,
+                updated,
+                total: rows.length,
+                errors: errors.slice(0, 5),
+            });
+
+        } catch (error) {
+            console.error('❌ Excel upload error:', error);
+            res.status(500).json({ error: 'Failed to process Excel: ' + error.message });
         }
-
-        res.json({ message: '✅ Excel processed!', created, updated, total: rows.length, errors: errors.slice(0, 5) });
-
-    } catch (error) {
-        console.error('Excel upload error:', error);
-        res.status(500).json({ error: 'Failed to process Excel: ' + error.message });
     }
-});
-
-// ✅ Update single attendance record
-router.put('/:id', protect, authorize('faculty', 'admin'), async (req, res) => {
-    try {
-        const record = await Attendance.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!record) return res.status(404).json({ error: 'Record not found' });
-        res.json(record);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Faculty-only routes
-router.use(protect, authorize('faculty', 'admin'));
-router.post('/mark', markAttendance);
-router.post('/notify-student', notifyAtRiskStudent);
+);
 
 module.exports = router;

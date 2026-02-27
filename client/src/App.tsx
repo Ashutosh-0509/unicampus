@@ -105,7 +105,7 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner position="top-right" expand={false} richColors />
-        <Router>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path={ROUTE_PATHS.LOGIN} element={<Navigate to="/" replace />} />
             <Route path="/" element={<LandingPage />} />

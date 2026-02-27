@@ -4,7 +4,7 @@
  */
 
 // ✅ Production URL - Render backend
-const API_BASE = import.meta.env.VITE_API_URL || 'https://unicampus-backend-1p7e.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000'; // Fallback to local if env not set
 
 async function apiRequest<T>(
   path: string,
