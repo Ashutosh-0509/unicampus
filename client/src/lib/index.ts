@@ -18,6 +18,10 @@ export const ROUTE_PATHS = {
   HOSTEL: '/student/hostel',
   FINANCE: '/student/finance',
   FEEDBACK: '/student/feedback',
+  EVENTS: '/student/events',
+  DOUBT_SOLVER: '/student/doubt-solver',
+
+
   // Faculty Routes
   FACULTY_DASHBOARD: '/faculty/dashboard',
   FACULTY_ATTENDANCE: '/faculty/attendance',
@@ -170,10 +174,10 @@ export const mockAttendanceData: AttendanceData[] = [
 export function parseStudentId(id: string) {
   const parts = id.split('_');
   if (parts.length < 2) return null;
-  
+
   const branch = parts[0];
   const yearCode = parts[1][0]; // Assuming first digit is year
-  
+
   return {
     branch: branch.toUpperCase(),
     year: parseInt(yearCode) || 1,

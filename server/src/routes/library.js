@@ -1,41 +1,48 @@
 const express = require('express');
 const router = express.Router();
+const Book = require('../models/Book');
 const { protect } = require('../middleware/authMiddleware');
-const { authorize } = require('../middleware/roleMiddleware');
-const {
-  lookupISBN,
-  addBook,
-  getBooks,
-  updateBook,
-  deleteBook,
-  issueBook,
-  returnBook,
-  getOverdueBooks,
-  waiveFine,
-  markFinePaid,
-  bulkRemind,
-  searchBooks,
-  reserveBook,
-  getMyBooks,
-  renewBook,
-} = require('../controllers/libraryController');
 
-router.get('/books/search', protect, authorize('student', 'faculty', 'admin'), searchBooks);
-router.get('/books/isbn-lookup', protect, authorize('admin'), lookupISBN);
-router.get('/books', protect, authorize('admin', 'faculty'), getBooks);
-router.post('/books', protect, authorize('admin'), addBook);
-router.patch('/books/:id', protect, authorize('admin'), updateBook);
-router.delete('/books/:id', protect, authorize('admin'), deleteBook);
+/**
+ * @desc    Get all books
+ * @route   GET /api/library
+ * @access  Private
+ */
+router.get('/', protect, async (req, res) => {
+  try {
+    const books = await Book.find().sort({ title: 1 });
+    res.json(books);
+  } catch (error) {
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
 
-router.post('/issue', protect, authorize('admin'), issueBook);
-router.post('/return/:issueId', protect, authorize('admin'), returnBook);
-router.get('/overdue', protect, authorize('admin'), getOverdueBooks);
-router.post('/fine/:issueId/waive', protect, authorize('admin'), waiveFine);
-router.patch('/fine/:issueId/paid', protect, authorize('admin'), markFinePaid);
-router.post('/bulk-remind', protect, authorize('admin'), bulkRemind);
+/**
+ * @desc    Borrow a book
+ * @route   POST /api/library/borrow/:id
+ * @access  Private
+ */
+router.post('/borrow/:id', protect, async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
 
-router.post('/reserve/:bookId', protect, authorize('student'), reserveBook);
-router.get('/my-books', protect, authorize('student', 'admin', 'faculty'), getMyBooks);
-router.post('/renew/:issueId', protect, authorize('student', 'admin'), renewBook);
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    if (book.availableCopies <= 0) {
+      return res.status(400).json({ error: 'No copies available' });
+    }
+
+    book.availableCopies -= 1;
+    book.borrowedBy = req.user._id;
+    book.dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+
+    await book.save();
+    res.json({ message: 'Book borrowed successfully', dueDate: book.dueDate });
+  } catch (error) {
+    res.status(500).json({ error: 'Server Error' });
+  }
+});
 
 module.exports = router;

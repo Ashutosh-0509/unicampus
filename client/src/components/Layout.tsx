@@ -29,7 +29,9 @@ import {
   UserCircle,
   ShieldAlert,
   Sparkles,
+  MessageSquareQuote,
   Settings
+
 } from 'lucide-react';
 import { ROUTE_PATHS, UserRole } from '@/lib/index';
 import { useAuth } from '@/hooks/useAuth';
@@ -71,7 +73,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Library', path: ROUTE_PATHS.LIBRARY, icon: Book },
     { label: 'Hostel', path: ROUTE_PATHS.HOSTEL, icon: Home },
     { label: 'Placements', path: ROUTE_PATHS.PLACEMENTS, icon: Briefcase },
+    { label: 'Events', path: ROUTE_PATHS.EVENTS, icon: Sparkles },
+    { label: 'Doubt Solver', path: ROUTE_PATHS.DOUBT_SOLVER, icon: MessageSquareQuote },
     { label: 'Feedback', path: ROUTE_PATHS.FEEDBACK, icon: MessageSquare },
+
+
   ];
 
   const facultyNav: NavItem[] = [

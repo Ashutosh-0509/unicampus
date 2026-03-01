@@ -5,10 +5,14 @@ const placementDriveSchema = new mongoose.Schema({
     role: String,
     ctc: String,
     cutoffCgpa: Number,
+    package: String,
+    eligibility: String,
     deadline: Date,
     status: { type: String, enum: ['open', 'closed', 'upcoming', 'ongoing', 'completed'], default: 'open' },
     eligibleBranches: [String],
+    description: String,
     logo: String,
+
     postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     applicants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });

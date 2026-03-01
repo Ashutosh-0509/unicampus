@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar as CalendarIcon, BookOpen, Clock, LayoutDashboard,
-  Bell, Search, AlertCircle, Loader2
+  Bell, Search, AlertCircle, Loader2, Sparkles, FileQuestion, FolderOpen
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { TimelineCard } from '@/components/TimelineCard';
@@ -196,7 +196,48 @@ const StudentDashboard: React.FC = () => {
             </div>
           </div>
 
+          {/* ✅ Quick Tools Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-slate-900">Quick Tools</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex flex-col items-center gap-2 bg-white border-slate-200 hover:border-primary/50 hover:bg-primary/5 group transition-all"
+                onClick={() => window.open('https://btechkeeda.great-site.net', '_blank')}
+              >
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  <FileQuestion className="w-5 h-5" />
+                </div>
+                <span className="font-semibold text-slate-700">PYQ Archive</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex flex-col items-center gap-2 bg-white border-slate-200 hover:border-emerald-500/50 hover:bg-emerald-50 group transition-all"
+                onClick={() => window.open('https://drive.google.com/drive/folders/1Q_9jGZYTZWu-KsmTnTnYKi-ZFjxMpxDg', '_blank')}
+              >
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                  <FolderOpen className="w-5 h-5" />
+                </div>
+                <span className="font-semibold text-slate-700">Study Notes</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex flex-col items-center gap-2 bg-white border-slate-200 hover:border-amber-500/50 hover:bg-amber-50 group transition-all"
+                onClick={() => window.location.hash = '#/student/doubt-solver'}
+              >
+
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <span className="font-semibold text-slate-700">Doubt Solver</span>
+              </Button>
+            </div>
+          </div>
+
           {/* ✅ AI Attendance Prediction */}
+
           <AIAttendancePrediction studentId={studentRollNumber} />
 
         </div>

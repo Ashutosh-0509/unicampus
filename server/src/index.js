@@ -40,6 +40,10 @@ app.use('/api/resources', require('./routes/resources'));
 app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/grading', require('./routes/grading'));
 app.use('/api/recommendations', require('./routes/recommendations'));
+app.use('/api/events', require('./routes/events'));
+app.use('/api/doubts', require('./routes/doubts'));
+
+
 
 app.get('/', (req, res) => {
   res.json({ message: 'Smart Campus API is running' });

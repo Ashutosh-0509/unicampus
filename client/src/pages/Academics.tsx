@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   BookOpen, User, Award, GraduationCap, Clock,
-  LayoutDashboard, Filter, ExternalLink, FileQuestion, Loader2, FolderOpen
+  LayoutDashboard, Filter, ExternalLink, FileQuestion, Loader2, FolderOpen, Sparkles
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import axios from 'axios';
@@ -121,7 +121,8 @@ export default function Academics() {
 
       {/* ✅ PYQ + Resources Quick Links */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
 
         {/* PYQ Card */}
         <Card className="border-blue-500/30 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 backdrop-blur-xl shadow-lg">
@@ -166,7 +167,29 @@ export default function Academics() {
             </div>
           </CardContent>
         </Card>
+        {/* Doubt card */}
+        <Card className="border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-orange-500/10 backdrop-blur-xl shadow-lg">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-600 text-white rounded-xl shadow-lg">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground">AI Doubt Solver</h3>
+                  <p className="text-muted-foreground text-xs">24/7 Academic Support</p>
+                </div>
+              </div>
+              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 whitespace-nowrap"
+                onClick={() => window.location.hash = '#/student/doubt-solver'}>
+                Open
+              </Button>
+
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
+
 
       {/* Attendance Chart */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>

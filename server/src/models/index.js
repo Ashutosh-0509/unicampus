@@ -16,6 +16,10 @@ const MaintenanceTicket = require('./MaintenanceTicket');
 const Feedback = require('./Feedback');
 const RecommendationLetter = require('./RecommendationLetter');
 const Grade = require('./Grade');
+const Event = require('./Event');
+const Doubt = require('./Doubt');
+
+
 
 // Export all models
 module.exports = {
@@ -39,4 +43,8 @@ module.exports = {
   Feedback,
   RecommendationLetter,
   Grade,
+  Event,
+  Doubt,
+
+
 };

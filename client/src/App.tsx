@@ -39,6 +39,10 @@ import StudentSignupManagement from '@/pages/StudentSignupManagement';
 
 // ✅ NEW: AI Attendance Analytics
 import AttendanceAnalytics from '@/pages/AttendanceAnalytics';
+import StudentEvents from '@/pages/StudentEvents';
+import DoubtSolver from '@/pages/DoubtSolver';
+
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -132,6 +136,20 @@ const App = () => {
                 <AttendanceAnalytics />
               </ProtectedRoute>
             } />
+
+            <Route path={ROUTE_PATHS.EVENTS} element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <StudentEvents />
+              </ProtectedRoute>
+            } />
+
+            <Route path={ROUTE_PATHS.DOUBT_SOLVER} element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <DoubtSolver />
+              </ProtectedRoute>
+            } />
+
+
 
             {/* Faculty Routes */}
             <Route path={ROUTE_PATHS.FACULTY_DASHBOARD} element={<ProtectedRoute allowedRoles={['faculty']}><FacultyDashboard /></ProtectedRoute>} />

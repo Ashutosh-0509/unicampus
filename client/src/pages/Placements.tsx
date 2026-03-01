@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Briefcase,
@@ -11,128 +11,73 @@ import {
   Building2,
   Calendar,
   ExternalLink,
+  Loader2
 } from 'lucide-react';
-import {
-  PlacementDrive,
-  formatCampusDate
-} from '@/lib/index';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
+import axios from 'axios';
 
-const API_BASE = 'https://unicampus-backend-1p7e.onrender.com';
-const STAGES = ['Applied', 'Shortlisted', 'Interview', 'Offer'];
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
-};
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { y: 0, opacity: 1 }
-};
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function Placements() {
-  const { user } = useAuth();
-  const [drives, setDrives] = useState<PlacementDrive[]>([]);
+  const { user, getAuthToken } = useAuth();
+  const [drives, setDrives] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [appliedDrives, setAppliedDrives] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isApplying, setIsApplying] = useState<string | null>(null);
+
+  const fetchDrives = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const token = getAuthToken();
+      const response = await axios.get(`${API}/api/placements`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDrives(response.data);
+    } catch (error) {
+      console.error('Failed to fetch placements:', error);
+      toast.error('Failed to load placement opportunities');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getAuthToken]);
 
   useEffect(() => {
-    const loadDrives = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE}/api/placements`);
-        if (!response.ok) {
-          throw new Error('Failed to load placement drives');
-        }
-        const data = await response.json();
-        setDrives(Array.isArray(data) ? data : []);
-      } catch (error) {
-        toast({
-          title: 'Placements unavailable',
-          description: 'Unable to load placement drives right now.',
-          variant: 'destructive',
-        });
-        setDrives([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadDrives();
-  }, []);
+    fetchDrives();
+  }, [fetchDrives]);
 
   const filteredDrives = useMemo(() =>
     drives.filter(drive =>
       drive.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      drive.role.toLowerCase().includes(searchTerm.toLowerCase())
+      drive.role?.toLowerCase().includes(searchTerm.toLowerCase())
     ), [drives, searchTerm]
   );
 
-  const handleApply = async (drive: PlacementDrive) => {
-    const studentId = user?.studentId || user?.rollNumber || user?.id;
-    const cgpa = user?.cgpa ?? 0;
-
-    if (!studentId) {
-      toast({
-        title: 'Missing student ID',
-        description: 'Please log in again to apply for drives.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (cgpa < drive.cutoffCgpa) {
-      toast({
-        title: 'Eligibility Error',
-        description: `Your CGPA (${cgpa}) is below the required ${drive.cutoffCgpa} for this drive.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const handleApply = async (driveId: string) => {
+    setIsApplying(driveId);
+    const toastId = toast.loading('Submitting application...');
     try {
-      const response = await fetch(`${API_BASE}/api/placements/${drive.id}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId }),
+      const token = getAuthToken();
+      await axios.post(`${API}/api/placements/${driveId}/apply`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (!response.ok) {
-        throw new Error('Application failed');
-      }
-
-      setAppliedDrives(prev => [...prev, drive.id]);
-      setDrives(prev => prev.map(item =>
-        item.id === drive.id
-          ? { ...item, applicants: (item.applicants || 0) + 1 }
-          : item
-      ));
-
-      toast({
-        title: 'Application Successful',
-        description: `You have successfully applied for ${drive.company} - ${drive.role}.`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Application failed',
-        description: 'Unable to apply right now. Please try again.',
-        variant: 'destructive',
-      });
+      toast.success('Successfully applied for the drive!', { id: toastId });
+      fetchDrives();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Application failed', { id: toastId });
+    } finally {
+      setIsApplying(null);
     }
   };
 
   const activeDrivesCount = drives.filter((drive) => drive.status === 'open').length;
+  const isAppliedTo = (drive: any) => (drive.applicants || []).some((id: any) => id?.toString() === user?.id);
+  const appliedDrivesCount = drives.filter(isAppliedTo).length;
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 md:p-10 space-y-10">
@@ -149,28 +94,15 @@ export default function Placements() {
             Elevate Your <span className="text-primary">Career Orbit</span>
           </h1>
           <p className="text-muted-foreground text-lg mb-8">
-            Access premium opportunities from top-tier organizations. Your academic excellence meets the industry's highest standards.
+            Access premium opportunities from top-tier organizations.
           </p>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex items-center gap-2 bg-card/50 backdrop-blur-md border border-white/5 px-4 py-2 rounded-xl">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <span className="text-sm font-medium">Avg. CTC: 24.5 LPA</span>
-            </div>
-            <div className="flex items-center gap-2 bg-card/50 backdrop-blur-md border border-white/5 px-4 py-2 rounded-xl">
-              <Trophy className="w-5 h-5 text-amber-500" />
-              <span className="text-sm font-medium">Highest: 1.2 Cr</span>
-            </div>
-          </div>
         </div>
-
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-accent/10 rounded-full blur-3xl -ml-20 -mb-20" />
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
           { label: 'Active Drives', value: activeDrivesCount.toString(), icon: <Briefcase className="w-4 h-4" /> },
-          { label: 'Applied', value: appliedDrives.length.toString(), icon: <CheckCircle2 className="w-4 h-4" /> },
+          { label: 'Applied', value: appliedDrivesCount.toString(), icon: <CheckCircle2 className="w-4 h-4" /> },
           { label: 'Upcoming', value: drives.filter((d) => d.status === 'upcoming').length.toString(), icon: <Calendar className="w-4 h-4" /> },
           { label: 'My Offers', value: '0', icon: <Trophy className="w-4 h-4" /> }
         ].map((stat, i) => (
@@ -188,113 +120,83 @@ export default function Placements() {
         ))}
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search companies or roles..."
-            className="pl-10 bg-card/40 border-white/10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button variant="outline" className="border-white/10">All Drives</Button>
-          <Button variant="outline" className="border-white/10">Shortlisted</Button>
-          <Button variant="outline" className="border-white/10">Eligible</Button>
-        </div>
+      <div className="relative w-full md:w-96">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Search companies or roles..."
+          className="pl-10 bg-card/40 border-white/10"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
 
-      {isLoading && (
-        <div className="text-sm text-muted-foreground">Loading placement drives...</div>
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-muted-foreground mt-4">Scouting vacancies...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence mode="popLayout">
+            {filteredDrives.map((drive) => {
+              const isApplied = isAppliedTo(drive);
+
+              return (
+                <motion.div key={drive._id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <Card className="group bg-card/40 backdrop-blur-md border-white/5 hover:border-primary/50 transition-all h-full flex flex-col overflow-hidden">
+                    <CardHeader className="pb-4">
+                      <div className="flex justify-between items-start">
+                        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+                          <Building2 className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                        </div>
+                        <Badge variant={drive.status === 'open' ? 'default' : 'secondary'} className="capitalize">
+                          {drive.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-4">
+                        <CardTitle className="text-xl">{drive.role}</CardTitle>
+                        <CardDescription className="text-foreground/80 font-medium flex items-center gap-1 mt-1">
+                          {drive.company} <ExternalLink className="w-3 h-3" />
+                        </CardDescription>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4 flex-grow">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Package</p>
+                          <p className="text-sm font-semibold text-primary">{drive.package || drive.ctc}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Deadline</p>
+                          <p className="text-sm font-semibold">{new Date(drive.deadline).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground line-clamp-2">
+                        {drive.eligibility}
+                      </div>
+                    </CardContent>
+                    <div className="p-4 pt-0">
+                      <Button
+                        className="w-full"
+                        variant={isApplied ? 'secondary' : 'default'}
+                        disabled={isApplied || drive.status !== 'open' || isApplying === drive._id}
+                        onClick={() => handleApply(drive._id)}
+                      >
+                        {isApplying === drive._id ? <Loader2 className="w-4 h-4 animate-spin" /> : isApplied ? 'Applied' : 'Apply Now'}
+                      </Button>
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       )}
 
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-      >
-        {filteredDrives.map((drive) => {
-          const isApplied = appliedDrives.includes(drive.id);
-          const cgpa = user?.cgpa ?? 0;
-          const isEligible = cgpa >= drive.cutoffCgpa;
-
-          return (
-            <motion.div key={drive.id} variants={itemVariants}>
-              <Card className="group bg-card/40 backdrop-blur-md border-white/5 hover:border-primary/50 transition-all duration-300 h-full flex flex-col">
-                <CardHeader className="pb-4">
-                  <div className="flex justify-between items-start">
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
-                      <Building2 className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                    <Badge variant={drive.status === 'open' ? 'default' : 'secondary'} className="capitalize">
-                      {drive.status}
-                    </Badge>
-                  </div>
-                  <div className="mt-4">
-                    <CardTitle className="text-xl">{drive.role}</CardTitle>
-                    <CardDescription className="text-foreground/80 font-medium flex items-center gap-1 mt-1">
-                      {drive.company} <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 flex-grow">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Package</p>
-                      <p className="text-sm font-semibold text-primary">{drive.ctc}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Min. CGPA</p>
-                      <p className="text-sm font-semibold">{drive.cutoffCgpa}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Users className="w-3 h-3" /> {drive.applicants} Applied
-                      </span>
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {formatCampusDate(drive.deadline).split(',')[0]}
-                      </span>
-                    </div>
-                    <Progress value={(drive.applicants / 2000) * 100} className="h-1 bg-white/5" />
-                  </div>
-
-                  {isApplied && (
-                    <div className="pt-4 border-t border-white/5">
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter mb-3">Track Status</p>
-                      <div className="flex justify-between items-center">
-                        {STAGES.map((stage, idx) => (
-                          <div key={stage} className="flex flex-col items-center">
-                            <div className={`w-2.5 h-2.5 rounded-full ${idx === 0 ? 'bg-primary' : 'bg-white/10'}`} />
-                            <span className="text-[9px] text-muted-foreground mt-1">{stage}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-                <div className="p-4 pt-0">
-                  <Button
-                    className="w-full"
-                    variant={isApplied ? 'secondary' : isEligible ? 'default' : 'outline'}
-                    disabled={isApplied || !isEligible}
-                    onClick={() => handleApply(drive)}
-                  >
-                    {isApplied ? 'Applied' : isEligible ? 'Apply Now' : 'Not Eligible'}
-                  </Button>
-                </div>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </motion.div>
-
       {!isLoading && filteredDrives.length === 0 && (
-        <div className="text-sm text-muted-foreground">No placement drives match your search.</div>
+        <div className="text-center py-20 bg-card/20 rounded-3xl border border-dashed text-muted-foreground">
+          No placement opportunities match your search.
+        </div>
       )}
     </div>
   );

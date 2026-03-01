@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const chatMessageSchema = new mongoose.Schema({
+    id: { type: String, unique: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     role: String,
     sender: String,
@@ -9,6 +10,7 @@ const chatMessageSchema = new mongoose.Schema({
     suggestions: [String],
     fallback: Boolean,
 }, { timestamps: true });
+
 
 const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
 module.exports = ChatMessage;
