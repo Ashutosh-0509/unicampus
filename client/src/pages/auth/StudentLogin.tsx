@@ -31,7 +31,8 @@ const StudentLogin = () => {
                 throw new Error("Please enter your Roll Number or Email");
             }
 
-            const response = await axios.post('http://localhost:5000/api/auth/login', {
+            const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
+            const response = await axios.post(`${API_BASE}/api/auth/login`, {
                 identifier: identifier.trim(),
                 password: password
             });

@@ -36,13 +36,13 @@ async function apiRequest<T>(
 
 // ─── Auth ───
 export const authApi = {
-  login: (identifier: string, role: string) =>
+  login: (email: string, password: string) =>
     apiRequest<{ user: any; token: string }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ identifier, role }),
+      body: JSON.stringify({ email, password }),
     }),
 
-  register: (data: { name: string; email: string; role: string; studentId?: string; facultyId?: string; branch?: string }) =>
+  register: (data: { name: string; email: string; password: string; role: string; studentId?: string; facultyId?: string; branch?: string }) =>
     apiRequest<{ user: any; token: string }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
