@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://unicampus-backend-1p7e.onrender.com';
 const BORROW_WINDOW_DAYS = 14;
 
 export default function Library() {
@@ -250,8 +250,8 @@ export default function Library() {
               const suggestion = isOverdue
                 ? 'Urgent: Return immediately to avoid fines.'
                 : isUrgent
-                ? 'Due soon. Renew now to avoid penalties.'
-                : 'You are on track. Keep an eye on the due date.';
+                  ? 'Due soon. Renew now to avoid penalties.'
+                  : 'You are on track. Keep an eye on the due date.';
 
               return (
                 <motion.div

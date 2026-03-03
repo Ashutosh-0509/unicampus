@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import axios from 'axios';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'https://unicampus-backend-1p7e.onrender.com';
 
 export default function Placements() {
   const { user, getAuthToken } = useAuth();
